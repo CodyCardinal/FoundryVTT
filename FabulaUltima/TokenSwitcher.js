@@ -1,3 +1,6 @@
+// This script allows you to define actor and token images, and with a single press of the macro button, you can toggle between them. 
+// This works great if you have alternate art for your characters, or secondary forms.
+
 if (canvas.tokens.controlled.length === 0) {
     ui.notifications.warn("No token selected!");
     return;
