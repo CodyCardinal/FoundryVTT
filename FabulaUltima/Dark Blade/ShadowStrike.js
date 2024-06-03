@@ -11,7 +11,6 @@ const weaponDamageLabel   = "Weapon Damage";
 const toHitLabel          = "Total to HIT:";
 const isHitTitle          = "Check for Hit";
 const isHitContent        = "<p>Did the attack hit?</p>";
-const AgonyTitle          = "Agony";
 const agonyDrained        = "Drain";
 const totalDarkDamage     = "Total DMG : ";
 const totalDamageLabel    = "Total DMG : ";
@@ -41,7 +40,7 @@ function checkAgony() {
         let agonyLevel   = agony.system.level.value;
             agonyDamage  = agonyLevel * 2;
             agonyMessage = `
-            <span style = "color:purple;"><b>${AgonyTitle} [SL${agonyLevel}] ${agonyDrained}</span></b><br/>
+            <span style = "color:purple;"><b>${AGONY_ITEM} [SL${agonyLevel}] ${agonyDrained}</span></b><br/>
             @GAIN[${agonyDamage} hp] @GAIN[${agonyDamage} mp]</span><br/>
             <br/>
             `;
