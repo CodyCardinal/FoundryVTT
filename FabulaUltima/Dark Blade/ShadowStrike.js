@@ -1,185 +1,218 @@
-// The Dark Blade class in Fabula Ultima has a lot of conditional abilities.
-// It's primary attack is called shadowstrike, and this script is designed to 
-// automate the decision tree you need to go through to resolve an attack.
-  
-// Constants
-const NO_TOKEN_SELECTED      = "No token selected!";
-const NO_ACTOR_FOUND         = "No actor found for the selected token!";
-const ROLL_FOR_SHADOW_STRIKE = "Roll for Shadow Strike";
-const CHECK_FOR_HIT          = "Check for Hit";
-const CHECK_FOR_AGONY_BOND   = "Check for Agony Bond";
-const MAIN_HAND              = "mainHand";
-const SHADOW_STRIKE          = "Shadow Strike";
-const AGONY                  = "Agony";
+    // Localization Strings
+const shadowStrikeLabel   = "Shadow Strike";
+const shadowStrikeTitle   = "Shadow Strike and Weapon Attack";
+const shadowStrikeContent = "<p>Roll Shadow Strike and MH Weapon Attack.</p>";
+const rollLabel           = "Roll!";
+const damageTakenLabel    = "Damage Taken";
+const damageDoneLabel     = "Damage Done";
+const weaponAccuracyLabel = "Weapon Accuracy";
+const weaponMasteryLabel  = "Weapon Mastery";
+const weaponDamageLabel   = "Weapon Damage";
+const toHitLabel          = "Total to HIT:";
+const isHitTitle          = "Check for Hit";
+const isHitContent        = "<p>Did the attack hit?</p>";
+const AgonyTitle          = "Agony";
+const agonyDrained        = "Drain";
+const totalDarkDamage     = "Total DMG : ";
+const totalDamageLabel    = "Total DMG : ";
+const attackMissed        = "The attack missed!<br/>";
+let   notFound            = "{item} item not found!";
 
-// Helper functions
-const rollDice = async (die) => {
-const roll = await new Roll(`1d${die}`).roll();
-game.dice3d?.showForRoll(roll);
-return roll;
-};
+    // [IMPORTANT] Item Names
+const AGONY_ITEM         = "Agony";
+const SHADOW_STRIKE_ITEM = "Shadow Strike";
 
-const createChatMessage = (content, actorName) => {
-ChatMessage.create({
-    content,
+function createChatMessage(content, actor) {
+  let speakerName = actor ? actor.name : "Default Actor";
+  ChatMessage.create({
+    content: content,
     speaker: {
-    alias: actorName
-    }
-});
-};
-
-// Main code
-if (canvas.tokens.controlled.length === 0) {
-ui.notifications.warn(NO_TOKEN_SELECTED);
-return;
+      alias: speakerName,
+    },
+  });
+  chatMessage = "";
 }
 
+function checkAgony() {
+    let agony        = actor.items.find((i) => i.name === AGONY_ITEM);
+    let agonyDamage  = 0;
+    let agonyMessage = "";
+    if (agony) {
+        let agonyLevel   = agony.system.level.value;
+            agonyDamage  = agonyLevel * 2;
+            agonyMessage = `
+            <span style = "color:purple;"><b>${AgonyTitle} [SL${agonyLevel}] ${agonyDrained}</span></b><br/>
+            @GAIN[${agonyDamage} hp] @GAIN[${agonyDamage} mp]</span><br/>
+            <br/>
+            `;
+    }
+    return agonyMessage;
+}
+
+    // ensure players token is selected
+if (canvas.tokens.controlled.length === 0) {
+  ui.notifications.warn("No token selected!");
+  return;
+}
+
+    // Get the token and actor from the selected token
 const token = canvas.tokens.controlled[0];
 const actor = token?.actor;
 if (!actor) {
-ui.notifications.warn(NO_ACTOR_FOUND);
-return;
+  ui.notifications.warn("No actor found for the selected token!");
+  return;
 }
 
 let mightDie = actor.system.attributes.mig.base;
-let primaryRoll, secondaryRoll, weapon, shadowStrikeRoll, shadowStrikeBonusDamage, weaponAccuracy, weaponPrimary, weaponSecondary, primaryDie, secondaryDie, totalAccuracyBonus, weaponTypeCapitalized;
-let weaponMasteryAccuracy = 0;
 
+    // Define primaryRoll, secondaryRoll, weapon, and shadowStrikeBonusDamage here
+let primaryRoll,
+  secondaryRoll,
+  weapon,
+  shadowStrikeRoll,
+  shadowStrikeBonusDamage,
+  weaponAccuracy,
+  weaponPrimary,
+  weaponSecondary,
+  primaryDie,
+  secondaryDie,
+  totalAccuracyBonus,
+  weaponTypeCapitalized;
+let weaponMasteryAccuracy = 0;
+let chatMessage = "";
+    // find the equipped mainhand weapon
 weapon = actor.items.find(
-(i) => i.system.isEquipped && i.system.isEquipped.value && i.system.isEquipped.slot === MAIN_HAND
+  (i) => i.system.isEquipped && i.system.isEquipped.value && i.system.isEquipped.slot === "mainHand"
 );
 
 if (weapon) {
-({ accuracy: { value: weaponAccuracy }, attributes: { primary: { value: weaponPrimary }, secondary: { value: weaponSecondary } } } = weapon.system);
-primaryDie   = actor.system.attributes[weaponPrimary].base;
-secondaryDie = actor.system.attributes[weaponSecondary].base;
+      // start getting stats from the weapon
+  weaponAccuracy  = weapon.system.accuracy.value;
+  weaponPrimary   = weapon.system.attributes.primary.value;
+  weaponSecondary = weapon.system.attributes.secondary.value;
 
-let weaponType            = weapon.system.type.value;
-    weaponTypeCapitalized = weaponType.charAt(0).toUpperCase() + weaponType.slice(1);
-let weaponMasteryType     = actor.items.find((i) => i.name === weaponTypeCapitalized + " Weapon Mastery");
-    weaponMasteryAccuracy = weaponMasteryType.system.level.value;
+      // start dice for those stats from the player
+  primaryDie   = actor.system.attributes[weaponPrimary].base;
+  secondaryDie = actor.system.attributes[weaponSecondary].base;
 
-totalAccuracyBonus = weaponAccuracy + weaponMasteryAccuracy;
+      // check for weapon mastery accuracy bonus
+  let weaponType            = weapon.system.type.value;
+      weaponTypeCapitalized = weaponType.charAt(0).toUpperCase() + weaponType.slice(1);
+  let weaponMasteryType     = actor.items.find((i) => i.name === weaponTypeCapitalized + " Weapon Mastery");
+      weaponMasteryAccuracy = weaponMasteryType ? weaponMasteryType.system.level.value : 0;
+
+      // total accuracy bonus
+  totalAccuracyBonus = weaponAccuracy + weaponMasteryAccuracy;
 }
 
-let shadowStrike = actor.items.find((i) => i.name === SHADOW_STRIKE);
+    // ShadowStrike Automation
+let shadowStrike = actor.items.find((i) => i.name === SHADOW_STRIKE_ITEM);
+
+if (!shadowStrike) {
+  ui.notifications.error(notFound.replace("{item}", SHADOW_STRIKE_ITEM));
+  return;
+}
 
 if (shadowStrike) {
-let shadowStrikeLevel = shadowStrike.system.level.value;
+  let shadowStrikeLevel = shadowStrike.system.level.value;
 
-new Dialog(
+  new Dialog(
     {
-    title  : ROLL_FOR_SHADOW_STRIKE,
-    content: `<p>${ROLL_FOR_SHADOW_STRIKE} bonus damage.</p>`,
-    buttons: {
+      title  : shadowStrikeTitle,
+      content: shadowStrikeContent,
+      buttons: {
         roll: {
-        label   : "Roll!",
-        callback: async () => {
-            shadowStrikeRoll                = await rollDice(mightDie);
+          label   : rollLabel,
+          callback: async () => {
+            shadowStrikeRoll = await new Roll("1d" + mightDie).roll();
+            game.dice3d?.showForRoll(shadowStrikeRoll);
+
+                // reduce actors hp by the shadowstrike roll
             actor.system.resources.hp.value = Math.max(actor.system.resources.hp.value - shadowStrikeRoll.total, 0);
-            shadowStrikeBonusDamage         = shadowStrikeRoll.total + shadowStrikeLevel;
 
-            createChatMessage(
-            `<span style="color:blue;">${SHADOW_STRIKE} (${shadowStrikeLevel})</span><br/>
-            <br />
-            <span style = "color:purple;">+${shadowStrikeBonusDamage} damage</span><br/>
-            <span style = "color:red;">-${shadowStrikeRoll.total} damage taken</span><br/>`,
-            actor.name
-            );
+            shadowStrikeBonusDamage = shadowStrikeRoll.total + shadowStrikeLevel;
 
-                primaryRoll   = await rollDice(primaryDie);
-                secondaryRoll = await rollDice(secondaryDie);
-            let attackRoll    = primaryRoll.total + secondaryRoll.total + totalAccuracyBonus;
+            chatMessage += `
+            <b><span style = "color:blue;">${shadowStrikeLabel} [SL${shadowStrikeLevel}]</span></b><br/>
+            <br/>
+            <span style = "color:purple;">+${shadowStrikeBonusDamage} ${game.i18n.localize("FU.Damage")}</span><br/>
+            <span style = "color:red;">-${shadowStrikeRoll.total} ${damageTakenLabel} : @LOSS[${shadowStrikeRoll.total} hp]</span><br/>
+            <br/>
+            `;
 
-            createChatMessage(
-            `${weapon.name}<br/>
+
+                // Roll the greatsword attack
+            primaryRoll = await new Roll("1d" + primaryDie).roll();
+            game.dice3d?.showForRoll(primaryRoll);
+            secondaryRoll = await new Roll("1d" + secondaryDie).roll();
+            game.dice3d?.showForRoll(secondaryRoll);
+            let attackRoll = primaryRoll.total + secondaryRoll.total + totalAccuracyBonus;
+
+            chatMessage += `
+            <b>${weapon.name}</b><br/>
+            Chance to Hit:<br/>
             +${primaryRoll.total} ${weaponPrimary.toUpperCase()}<br/>
             +${secondaryRoll.total} ${weaponSecondary.toUpperCase()}<br/>
-            +${weaponAccuracy} Weapon Accuracy <br />
-            +${weaponMasteryAccuracy} ${weaponTypeCapitalized} Weapon Mastery <br/>
-            <br />
-            <span style="color:green;"><b>Total to HIT: ${attackRoll}</b><br/></span>`,
-            actor.name
-            );
+            +${weaponAccuracy} ${weaponAccuracyLabel}<br/>
+            +${weaponMasteryAccuracy} ${weaponTypeCapitalized} ${weaponMasteryLabel} [SL${weaponMasteryAccuracy}]<br/>
+            <br/>
+            <span style = "color:green;"><b>${toHitLabel} ${attackRoll}</b><br/></span>
+            `;
 
-            new Dialog(
-            {
-                title  : CHECK_FOR_HIT,
-                content: `<p>${CHECK_FOR_HIT}?</p>`,
-                buttons: {
+            createChatMessage(chatMessage, actor);
+
+            new Dialog({
+            title  : isHitTitle,
+            content: isHitContent,
+            buttons: {
                 yes: {
                     label   : "Yes",
                     callback: async () => {
-                    let agony       = actor.items.find((i) => i.name === AGONY);
-                    let agonyDamage = 0;
-                    let bonded      = false;
-
-                    if (agony) {
-                        let agonyLevel = agony.system.level.value;
-                        new Dialog(
-                        {
-                            title  : CHECK_FOR_AGONY_BOND,
-                            content: `<p>Is the target a Bond for ${AGONY}?</p>`,
-                            buttons: {
-                            yes: {
-                                label   : "Yes",
-                                callback: async () => {
-                                bonded                          = true;
-                                agonyDamage                     = agonyLevel * 2;
-                                actor.system.resources.hp.value = Math.min(actor.system.resources.hp.value + agonyDamage, actor.system.resources.hp.max);
-                                actor.system.resources.mp.value = Math.min(actor.system.resources.mp.value + agonyDamage, actor.system.resources.mp.max);
-
-                                let totalDamage = Math.max(primaryRoll.total, secondaryRoll.total) + weapon.system.damage.value + shadowStrikeBonusDamage;
-
-                                createChatMessage(
-                                    `<span style="color:purple;">${AGONY} HP/MP Drained : +${agonyDamage}</span><br/>
-                                    <br />
-                                    <span style="color:green;"><b>Total Dark DMG : ${totalDamage}</b></span><br/>`,
-                                    actor.name
-                                );
-                                },
-                            },
-                            no: {
-                                label   : "No",
-                                callback: async () => {
-                                bonded = false;
-
-                                let totalDamage = Math.max(primaryRoll.total, secondaryRoll.total) + weapon.system.damage.value + shadowStrikeBonusDamage;
-
-                                createChatMessage(
-                                    `[HR ${Math.max(primaryRoll.total, secondaryRoll.total)} + ${weapon.system.damage.value}]<br/>
-                                    <span style="color:green;">Total [HR + Weapon + SS] DMG : ${totalDamage}</span><br/>`,
-                                    actor.name
-                                );
-                                },
-                            },
-                            },
-                        },
-                        {
-                            width: 250,
-                        }
-                        ).render(true);
-                    }
+                        let totalDamage = Math.max(primaryRoll.total, secondaryRoll.total) + weapon.system.damage.value + shadowStrikeBonusDamage;
+                        chatMessage += `
+                        ${damageDoneLabel}:<br/>
+                        +${Math.max(primaryRoll.total, secondaryRoll.total)} HR<br/>
+                        +${weapon.system.damage.value} ${weaponDamageLabel}<br/>
+                        +${shadowStrikeBonusDamage} ${shadowStrikeLabel}<br/>
+                        <br/>
+                        <span style = "color:green;"><b>${totalDamageLabel}@DMG[${totalDamage} dark]</b></span><br/>
+                        `;
+                        createChatMessage(chatMessage, actor);
+                    },
+                },
+                yes_bonded: {
+                    label: "Yes, Bonded",
+                    callback: async () => {
+                        chatMessage += await checkAgony();
+                        let totalDamage = Math.max(primaryRoll.total, secondaryRoll.total) + weapon.system.damage.value + shadowStrikeBonusDamage;
+                        chatMessage += `
+                        ${damageDoneLabel}:<br/>
+                        +${Math.max(primaryRoll.total, secondaryRoll.total)} HR<br/>
+                        +${weapon.system.damage.value} ${weaponDamageLabel}<br/>
+                        +${shadowStrikeBonusDamage} ${shadowStrikeLabel}<br/>
+                        <br/>
+                        <span style = "color:green;"><b>${totalDamageLabel}@DMG[${totalDamage} dark]</b></span><br/>
+                        `;
+                        createChatMessage(chatMessage, actor);
                     },
                 },
                 no: {
                     label   : "No",
                     callback: async () => {
-                    createChatMessage(`The attack missed!<br/>`, actor.name);
+                        chatMessage = attackMissed;
+                        createChatMessage(chatMessage, actor);
                     },
                 },
-                },
             },
-            {
-                width: 250,
-            }
-            ).render(true);
+            }, {
+            width: 450,
+            }).render(true);
+          },
         },
-        },
-    },
+      },
     },
     {
-    width: 350,
+      width: 350,
     }
-).render(true);
+  ).render(true);
 }
